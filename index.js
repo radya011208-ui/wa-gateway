@@ -9,7 +9,7 @@ const app = express();
 app.use(express.json());
 
 // --- GANTI DENGAN DOMAIN INFINITYFREE KAMU ---
-const CRM_WEBHOOK_URL = ' https://desktop-suitable-doze.ngrok-free.dev/wa-crm/webhook.php';
+const CRM_WEBHOOK_URL = 'https://desktop-suitable-doze.ngrok-free.dev/wa-crm/webhook.php';
 
 let sock;
 let qrCodeData = '';
