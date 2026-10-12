@@ -57,11 +57,16 @@ async function connectToWhatsApp() {
     sock.ev.on('messages.upsert', async m => {
         const msg = m.messages[0];
         if (!msg.key.fromMe && m.type === 'notify') {
-            const sender = msg.key.remoteJid.replace('@s.whatsapp.net', '');
+            // Ambil remoteJid (nomor HP pengirim asli)
+            let rawSender = msg.key.participant || msg.key.remoteJid || '';
+            
+            // Ekstrak hanya angka nomor HP (sebelum tanda @ atau :)
+            let sender = rawSender.split('@')[0].split(':')[0];
+            
             const message = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
             const pushName = msg.pushName || 'Prospek WA';
 
-            if (message) {
+            if (message && sender) {
                 try {
                     await axios.post(CRM_WEBHOOK_URL, {
                         sender: sender,
