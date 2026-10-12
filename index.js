@@ -16,7 +16,7 @@ let connectionStatus = 'disconnected';
 let userPhone = '';
 
 // Ganti dengan URL webhook CRM PHP Anda di InfinityFree
-const CRM_WEBHOOK_URL = 'https://namadomainmu.kesug.com/webhook.php';
+const CRM_WEBHOOK_URL = 'https://simpswhatsappcrm.kesug.com/webhook.php';
 
 async function connectToWhatsApp() {
     const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
