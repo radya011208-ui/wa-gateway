@@ -55,6 +55,14 @@ async function connectToWhatsApp() {
             let rawSender = msg.key.participant || msg.key.remoteJid || '';
             let sender = rawSender.split('@')[0].split(':')[0];
             
+            // --- NORMALISASI NOMOR KE FORMAT 08... ---
+            // Jika nomor diawali '62', ubah jadi '0' di depannya
+            if (sender.startsWith('62')) {
+                sender = '0' + sender.slice(2);
+            }
+            // Jika nomor berformat LID / acak (misal 1106...), biarkan atau sesuaikan
+            // ------------------------------------------
+
             const message = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
             const pushName = msg.pushName || 'Prospek WA';
 
@@ -66,7 +74,7 @@ async function connectToWhatsApp() {
                         name: pushName
                     });
                     console.log(`Pesan dari ${sender} diteruskan ke CRM.`);
-                    console.log('Respon dari CRM:', response.data); // Cek bagian ini di Log Railway nanti
+                    console.log('Respon dari CRM:', response.data);
                 } catch (error) {
                     console.error('Gagal mengirim webhook ke CRM:', error.message);
                 }
@@ -98,17 +106,28 @@ app.get('/qr', async (req, res) => {
     }
 });
 
-// Endpoint untuk mengirim pesan balasan dari CRM PHP
+// Endpoint untuk mengirim pesan balasan dari CRM PHP (Dilengkapi Auto-Format Nomor 62)
 app.post('/send', async (req, res) => {
     const { phone, message } = req.body;
     if (!phone || !message) {
         return res.status(400).json({ status: false, message: 'Nomor dan pesan wajib diisi' });
     }
     try {
-        const formattedPhone = phone.includes('@s.whatsapp.net') ? phone : `${phone}@s.whatsapp.net`;
+        // Bersihkan karakter non-angka
+        let cleanPhone = phone.replace(/\D/g, '');
+        
+        // Jika nomor diawali angka '0', ubah jadi '62' (Format Indonesia)
+        if (cleanPhone.startsWith('0')) {
+            cleanPhone = '62' + cleanPhone.slice(1);
+        }
+        
+        const formattedPhone = cleanPhone.includes('@s.whatsapp.net') ? cleanPhone : `${cleanPhone}@s.whatsapp.net`;
+        
         await sock.sendMessage(formattedPhone, { text: message });
+        console.log(`Pesan terkirim ke ${formattedPhone}`);
         res.json({ status: true, message: 'Pesan berhasil dikirim' });
     } catch (error) {
+        console.error('Gagal mengirim pesan via WA:', error.message);
         res.status(500).json({ status: false, error: error.message });
     }
 });
