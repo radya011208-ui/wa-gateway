@@ -51,39 +51,41 @@ async function connectToWhatsApp() {
     // Tangkap Pesan Masuk & Teruskan ke CRM PHP (Dilengkapi Debug Respon)
    sock.ev.on('messages.upsert', async m => {
     const msg = m.messages[0];
-    if (!msg.key.fromMe && m.type === 'notify') {
+    if (m.type === 'notify') {
+        let isFromMe = msg.key.fromMe; // True jika dikirim oleh bot/marketing dari WA
         let rawJid = msg.key.remoteJid || '';
         if (msg.key.participant) {
             rawJid = msg.key.participant;
         }
 
-        let sender = rawJid; // Default gunakan JID mentah aslinya
-
-        // Jika formatnya nomor telepon biasa (@s.whatsapp.net), ubah ke 08...
+        let contactJid = rawJid;
         if (rawJid.includes('@s.whatsapp.net')) {
             let clean = rawJid.split('@')[0].split(':')[0];
             if (clean.startsWith('62')) {
-                sender = '0' + clean.slice(2);
+                contactJid = '0' + clean.slice(2);
             } else {
-                sender = clean;
+                contactJid = clean;
             }
-        } 
-        // Jika formatnya LID (misal ...@lid), biarkan utuh (misal: 111648077537350@lid) 
-        // agar database menyimpan format yang benar untuk dibalas nanti.
+        } else if (rawJid.includes('@lid')) {
+            contactJid = rawJid;
+        }
 
         const message = msg.message?.conversation || 
                         msg.message?.extendedTextMessage?.text || 
                         msg.message?.imageMessage?.caption || '';
-        const pushName = msg.pushName || 'Prospek WA';
+        
+        // Tentukan nama pengirim/penerima
+        const pushName = msg.pushName || (isFromMe ? 'Marketing' : 'Prospek WA');
 
-        if (message && sender) {
+        if (message && contactJid && !contactJid.includes('@g.us')) {
             try {
                 await axios.post(CRM_WEBHOOK_URL, {
-                    sender: sender,
+                    sender: contactJid,
                     message: message,
-                    name: pushName
+                    name: pushName,
+                    sender_type: isFromMe ? 'agent' : 'customer' // Kirim status pengirim ke PHP
                 });
-                console.log(`[Webhook] Pesan dari ${sender} berhasil dikirim ke CRM.`);
+                console.log(`[Webhook] Pesan (${isFromMe ? 'Agent' : 'Customer'}) berhasil dikirim ke CRM.`);
             } catch (error) {
                 console.error('[Webhook Error]:', error.message);
             }
