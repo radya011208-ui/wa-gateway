@@ -52,34 +52,32 @@ async function connectToWhatsApp() {
    sock.ev.on('messages.upsert', async m => {
     const msg = m.messages[0];
     if (!msg.key.fromMe && m.type === 'notify') {
-        
-        // Ambil JID mentah (bisa berupa @s.whatsapp.net atau @lid)
         let rawJid = msg.key.remoteJid || '';
         if (msg.key.participant) {
             rawJid = msg.key.participant;
         }
 
-        // Tentukan identifier pengirim (jika LID, biarkan formatnya agar tetap valid untuk dibalas)
-        let sender = rawJid; 
+        let sender = rawJid; // Default gunakan JID mentah aslinya
+
+        // Jika formatnya nomor telepon biasa (@s.whatsapp.net), ubah ke 08...
         if (rawJid.includes('@s.whatsapp.net')) {
-            sender = rawJid.split('@')[0].split(':')[0];
-            if (sender.startsWith('62')) {
-                sender = '0' + sender.slice(2);
+            let clean = rawJid.split('@')[0].split(':')[0];
+            if (clean.startsWith('62')) {
+                sender = '0' + clean.slice(2);
+            } else {
+                sender = clean;
             }
-        } else if (rawJid.includes('@lid')) {
-            // Jika berupa LID, simpan apa adanya agar Baileys bisa mengenalnya saat dibalas
-            sender = rawJid; 
-        }
+        } 
+        // Jika formatnya LID (misal ...@lid), biarkan utuh (misal: 111648077537350@lid) 
+        // agar database menyimpan format yang benar untuk dibalas nanti.
 
         const message = msg.message?.conversation || 
                         msg.message?.extendedTextMessage?.text || 
                         msg.message?.imageMessage?.caption || '';
-                        
         const pushName = msg.pushName || 'Prospek WA';
 
         if (message && sender) {
             try {
-                // Kirim data ke PHP CRM lokal via Ngrok
                 await axios.post(CRM_WEBHOOK_URL, {
                     sender: sender,
                     message: message,
@@ -87,7 +85,7 @@ async function connectToWhatsApp() {
                 });
                 console.log(`[Webhook] Pesan dari ${sender} berhasil dikirim ke CRM.`);
             } catch (error) {
-                console.error('[Webhook Error] Gagal kirim ke CRM:', error.message);
+                console.error('[Webhook Error]:', error.message);
             }
         }
     }
@@ -128,19 +126,23 @@ app.post('/send', async (req, res) => {
     try {
         let targetJid = phone;
 
-        // Jika target dari database berupa LID (mengandung @lid), gunakan langsung
-        if (phone.includes('@lid')) {
-            targetJid = phone;
-        } else {
-            // Jika nomor biasa (08...), ubah ke format 62...@s.whatsapp.net
-            let cleanPhone = phone.replace(/\D/g, '');
-            if (cleanPhone.startsWith('0')) {
-                cleanPhone = '62' + cleanPhone.slice(1);
+        // Jika nomor dari database belum memiliki akhiran @, tentukan formatnya
+        if (!targetJid.includes('@')) {
+            let cleanPhone = targetJid.replace(/\D/g, '');
+            
+            // Jika berupa LID (angka sangat panjang tanpa awalan 0/62)
+            if (cleanPhone.length > 13 && !cleanPhone.startsWith('0') && !cleanPhone.startsWith('62')) {
+                targetJid = cleanPhone + '@lid';
+            } else {
+                // Nomor HP biasa
+                if (cleanPhone.startsWith('0')) {
+                    cleanPhone = '62' + cleanPhone.slice(1);
+                }
+                targetJid = cleanPhone + '@s.whatsapp.net';
             }
-            targetJid = `${cleanPhone}@s.whatsapp.net`;
         }
 
-        console.log(`Mengirim pesan ke JID: ${targetJid}`);
+        console.log(`Mengirim pesan ke JID tujuan: ${targetJid}`);
         await sock.sendMessage(targetJid, { text: message });
         
         return res.json({ status: true, message: 'Pesan berhasil dikirim' });
